@@ -10,6 +10,9 @@ from sklearn.utils import shuffle
 from sklearn.neighbors import KNeighborsRegressor
 import numpy as np
 from sklearn.neural_network import MLPRegressor
+from sklearn.exceptions import ConvergenceWarning
+import warnings
+warnings.simplefilter('ignore', ConvergenceWarning)
 
 
 data = pd.read_csv('./data/qsar_fish_toxicity.csv', delimiter=';')
@@ -87,6 +90,7 @@ for i in range(20): #
     svr_best_c = 0
     svr_best_kernel = 0
 
+
     for c in range(1, 20):
         for kernel in ['linear', 'poly', 'rbf', 'sigmoid']:
         # for kernel in ['linear']:
@@ -108,8 +112,13 @@ for i in range(20): #
                 svr_best_c = c
                 svr_best_kernel = kernel
 
+    Y_pred = svr_best_model.predict(x_test)
 
-    svr_dict["C"].append(c)
+    mae = mean_absolute_error(y_validation, Y_pred)
+    mse = mean_squared_error(y_validation, Y_pred)
+    rmse = np.sqrt(mse)
+
+    svr_dict["C"].append(svr_best_c)
     svr_dict["KERNEL"].append(svr_best_kernel)
     svr_dict["MAE"].append(mae)
     svr_dict["MSE"].append(mse)
@@ -153,6 +162,12 @@ for i in range(20): #
                 mlp_best_activation = activation
                 mlp_best_hidden_layer_sizes = hidden_layer_sizes
 
+    Y_pred = mlp_best_model.predict(x_test)
+
+    mae = mean_absolute_error(y_validation, Y_pred)
+    mse = mean_squared_error(y_validation, Y_pred)
+    rmse = np.sqrt(mse)
+
     mlp_dict["HIDDEN_LAYER"].append(mlp_best_hidden_layer_sizes)
     mlp_dict["ACTIVATION"].append(mlp_best_activation)
     mlp_dict["MAE"].append(mae)
@@ -186,13 +201,6 @@ for i in range(20): #
             mse = mean_squared_error(y_validation, Y_pred)
             rmse = np.sqrt(mse)
 
-            rf_dict["N_ESTIMATORS"].append(n_estimators)
-            rf_dict["MAX_DEPTH"].append(max_depth)
-            rf_dict["MAE"].append(mae)
-            rf_dict["MSE"].append(mse)
-            rf_dict["RMSE"].append(rmse)
-            rf_dict[""].append("RF")
-
             if rmse < rf_best_rmse:
                 rf_best_rmse = rmse
                 rf_best_model = rf
@@ -201,6 +209,12 @@ for i in range(20): #
                 current_mae = mae
                 current_max_depth = max_depth
                 current_n_estimators = n_estimators
+
+    Y_pred = rf_best_model.predict(x_test)
+
+    mae = mean_absolute_error(y_validation, Y_pred)
+    mse = mean_squared_error(y_validation, Y_pred)
+    rmse = np.sqrt(mse)
 
     # Calculate means
     rf_dict[''].append(i)
@@ -239,20 +253,18 @@ for i in range(20): #
                 mse = mean_squared_error(y_validation, Y_pred)
                 rmse = np.sqrt(mse)
 
-                gb_dict["N_ESTIMATORS"].append(n_estimators)
-                gb_dict["LEARNING_RATE"].append(learning_rate)
-                gb_dict["MAX_DEPTH"].append(max_depth)
-                gb_dict["MAE"].append(mae)
-                gb_dict["MSE"].append(mse)
-                gb_dict["RMSE"].append(rmse)
-                gb_dict[""].append("GB")
-
                 if rmse < gb_best_rmse:
                     gb_best_rmse = rmse
                     gb_best_model = gb
                     current_learning_rate = learning_rate
                     current_n_estimators = n_estimators
                     current_max_depth = max_depth
+
+    Y_pred = gb_best_model.predict(x_test)
+
+    mae = mean_absolute_error(y_validation, Y_pred)
+    mse = mean_squared_error(y_validation, Y_pred)
+    rmse = np.sqrt(mse)
 
     gb_dict[''].append(i)
     gb_dict['N_ESTIMATORS'].append(current_n_estimators)
@@ -382,7 +394,7 @@ gb_df.to_csv("gb-results.csv")
 
 
 ## Análise estatística
-from scipy.stats import kruskal
+from scipy.stats import kruskal, mannwhitneyu
 
 knr_rmse = knr_dict['RMSE'][:-2]
 svr_rmse = svr_dict['RMSE'][:-2]
@@ -395,5 +407,32 @@ stat, p_value = kruskal(knr_rmse, svr_rmse, mlp_rmse, rf_rmse, gb_rmse)
 print(f"Kruskal-Wallis H-statistic: {stat}")
 print(f"P-value: {p_value}")
 
+def mann_whitney_test(model1, model2, model1_name, model2_name):
+    stat, p_value = mannwhitneyu(model1, model2)
+    significance = "Significant" if p_value < 0.05 else "Not Significant"
+    return f"Mann-Whitney U test between {model1_name} and {model2_name}: p-value = {p_value:.5f}, Result = {significance}"
+
 if p_value < 0.05:
     print("Diferença significante")
+
+    results = []
+    results.append(mann_whitney_test(knr_rmse, svr_rmse, "KNR", "SVR"))
+    print(f"Whitney KNR - SVR: {results[0]}")
+    results.append(mann_whitney_test(knr_rmse, mlp_rmse, "KNR", "MLP"))
+    print(f"Whitney KNR - MLP: {results[1]}")
+    results.append(mann_whitney_test(knr_rmse, rf_rmse, "KNR", "RF"))
+    print(f"Whitney KNR - RF: {results[2]}")
+    results.append(mann_whitney_test(knr_rmse, gb_rmse, "KNR", "GB"))
+    print(f"Whitney KNR - GB: {results[3]}")
+    results.append(mann_whitney_test(svr_rmse, mlp_rmse, "SVR", "MLP"))
+    print(f"Whitney SVR - MLP: {results[4]}")
+    results.append(mann_whitney_test(svr_rmse, rf_rmse, "SVR", "RF"))
+    print(f"Whitney SVR - RF: {results[5]}")
+    results.append(mann_whitney_test(svr_rmse, gb_rmse, "SVR", "GB"))
+    print(f"Whitney SVR - GB: {results[6]}")
+    results.append(mann_whitney_test(mlp_rmse, rf_rmse, "MLP", "RF"))
+    print(f"Whitney MLP - RF: {results[7]}")
+    results.append(mann_whitney_test(mlp_rmse, gb_rmse, "MLP", "GB"))
+    print(f"Whitney MLP - GB: {results[8]}")
+    results.append(mann_whitney_test(rf_rmse, gb_rmse, "RF", "GB"))
+    print(f"Whitney RF - GB: {results[9]}")
